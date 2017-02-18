@@ -1,4 +1,7 @@
-﻿using System.Linq;
+﻿using System.Configuration;
+using System.Linq;
+using System.Web.Configuration;
+using System.Web.Security;
 using Umbraco.Core;
 using Umbraco.Core.Events;
 using Umbraco.Core.Models;
@@ -16,6 +19,18 @@ namespace UmbracoAuthTokens
         /// </summary>
         protected override void ApplicationStarted(UmbracoApplicationBase umbracoApplication, ApplicationContext applicationContext)
         {
+            // Store our JWT secret somewhere safe before adding it to the Env variable.
+            // This allows us to move the project between environments and maintain the
+            // same secret. This should ideally be in a config file of its own so 
+            // we can ignore it from source control etc. but we're just going to use
+            // AppSettings for now...
+            Configuration config = WebConfigurationManager.OpenWebConfiguration("/");
+            if (config.AppSettings.Settings["JWT:Secret"] == null)
+            {
+                config.AppSettings.Settings.Add("JWT:Secret", Membership.GeneratePassword(50, 5));
+                config.Save(ConfigurationSaveMode.Modified);
+            }
+
             //When Umbraco Started lets check for DB table exists
             var db = applicationContext.DatabaseContext.Database;
 

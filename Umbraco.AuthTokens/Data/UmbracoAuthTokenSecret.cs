@@ -1,6 +1,7 @@
 ﻿using System;
+using System.Configuration;
 using System.Web.Security;
- 
+
 namespace UmbracoAuthTokens.Data
 {
     public static class UmbracoAuthTokenSecret
@@ -13,7 +14,7 @@ namespace UmbracoAuthTokens.Data
         /// <param name="secret">Secret string to set</param>
         public static void SetSecret(string secret)
         {
-            Environment.SetEnvironmentVariable(SecretEnvVariable, secret, EnvironmentVariableTarget.Machine);
+            Environment.SetEnvironmentVariable(SecretEnvVariable, secret);
         }
  
         /// <summary>
@@ -22,13 +23,13 @@ namespace UmbracoAuthTokens.Data
         /// <returns>Returns the string secret</returns>
         public static string GetSecret()
         {
-            var secret = Environment.GetEnvironmentVariable(SecretEnvVariable, EnvironmentVariableTarget.Machine);
+            var secret = Environment.GetEnvironmentVariable(SecretEnvVariable);
  
             //If it does not exist or is null/empty then we set a new one
             if (string.IsNullOrEmpty(secret))
             {
-                //Lets create a random strong password & set env variable
-                secret =  Membership.GeneratePassword(50, 5);
+                //Get our JWT Secret from AppSettings
+                secret = ConfigurationManager.AppSettings["JWT:Secret"].ToString();
  
                 //Set it as the Env Var
                 SetSecret(secret);
