@@ -32,7 +32,8 @@ namespace UmbracoAuthTokens
             }
 
             //When Umbraco Started lets check for DB table exists
-            var db = applicationContext.DatabaseContext.Database;
+            var dbContext = applicationContext.DatabaseContext;
+            var db = new DatabaseSchemaHelper(dbContext.Database, applicationContext.ProfilingLogger.Logger, dbContext.SqlSyntax);
 
             //If table does not exist
             if (!db.TableExist("identityAuthTokens"))
