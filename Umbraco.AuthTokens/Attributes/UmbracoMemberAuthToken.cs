@@ -18,6 +18,7 @@ namespace UmbracoAuthTokens.Attributes
     public class UmbracoMemberAuthToken : ActionFilterAttribute
     {
         private string _isInGroup;
+        public const string JWTCookie = "umbJWT";
  
         /// <summary>
         /// Assign this attribute to protect a WebAPI call for an Umbraco member
@@ -73,6 +74,37 @@ namespace UmbracoAuthTokens.Attributes
             //Continue as normal
             base.OnActionExecuting(actionContext);
         }
+
+        /// <summary>
+        /// Try to get the Auth Bearer token from either the request auth Header or Cookies.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns>Returns the token as a string, empty if we couldn't find one.</returns>
+        private static string GetTokenFromRequest(HttpRequestMessage request)
+        {
+            // Get the Authorization header in the request
+            var ah = request.Headers.Authorization;
+
+            // If Auth header is sent and the scheme is bearer aka TOKEN
+            if (ah != null && ah.Scheme.ToLower() == "bearer")
+            {
+                // Get the JWT token from auth HTTP header param  param (Base64 encoded - username:password)
+                return ah.Parameter;
+            }
+            else
+            {
+                // Otherwise check if there's a cookie for the TOKEN
+                var cookie = request.Headers.GetCookies(JWTCookie).FirstOrDefault();
+
+                // If there is, use that!
+                if (cookie != null)
+                {
+                    return cookie[JWTCookie].Value;
+                }
+            }
+
+            return string.Empty;
+        }
  
         /// <summary>
         /// Try and auth the user from the HTTP headers on the request to the API
@@ -82,59 +114,52 @@ namespace UmbracoAuthTokens.Attributes
         /// <returns>If success auth'd return the associated Umbraco backoffice user</returns>
         private static IMember Authenticate(HttpRequestMessage request)
         {
-            //Try to get the Authorization header in the request
-            var ah = request.Headers.Authorization;
- 
-            //If no Auth header sent or the scheme is not bearer aka TOKEN
-            if (ah == null || ah.Scheme.ToLower() != "bearer")
-            {
-                //Return null (by returning null, base method above will return it as HTTP 401)
-                return null;
-            }
- 
-            //Get the JWT token from auth HTTP header param  param (Base64 encoded - username:password)
-            var jwtToken = ah.Parameter;
+            // Try to get the JWT token from the request
+            string jwtToken = GetTokenFromRequest(request);
+
+            // Return null if we didn't find a token (by returning null, base method above will return it as HTTP 401)
+            if (string.IsNullOrEmpty(jwtToken)) return null;
  
             try
             {
-                //Decode & verify token was signed with our secret
+                // Decode & verify token was signed with our secret
                 var decodeJwt = UmbracoAuthTokenFactory.DecodeUserAuthToken(jwtToken);
  
-                //Ensure our token is not null (was decoded & valid)
+                // Ensure our token is not null (was decoded & valid)
                 if (decodeJwt != null)
                 {
-                    //Just the presence of the token & being deserialised with correct SECRET key is a good sign
-                    //Get the member from userService from it's id
+                    // Just the presence of the token & being deserialised with correct SECRET key is a good sign
+                    // Get the member from userService from it's id
                     var member = ApplicationContext.Current.Services.MemberService.GetById(decodeJwt.IdentityId);
  
-                    //If user is NOT Approved OR the user is Locked Out
+                    // If user is NOT Approved OR the user is Locked Out
                     if (!member.IsApproved || member.IsLockedOut)
                     {
-                        //Return null (by returning null, base method above will return it as HTTP 401)
+                        // Return null (by returning null, base method above will return it as HTTP 401)
                         return null;
                     }
  
-                    //Verify token is what we have on the user
+                    // Verify token is what we have on the user
                     var isTokenValid = UserAuthTokenDbHelper.IsTokenValid(decodeJwt);
  
-                    //Token matches what we have in DB
+                    // Token matches what we have in DB
                     if (isTokenValid)
                     {
-                        //Lets return the member
+                        // Lets return the member
                         return member;
                     }
  
-                    //Token does not match in DB
+                    // Token does not match in DB
                     return null;
                 }
  
  
-                //JWT token could not be serialised to AuthToken object
+                // JWT token could not be serialised to AuthToken object
                 return null;
             }
             catch (SignatureVerificationException ex)
             {
-                //Bubble exception up
+                // Bubble exception up
                 throw ex;
             }
  
